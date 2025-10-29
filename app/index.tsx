@@ -1,134 +1,90 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  StatusBar,
-  Alert,
-} from 'react-native';
+import React, { useEffect } from 'react';
+import { SafeAreaView, StatusBar, View, Text, StyleSheet, TouchableOpacity, useColorScheme } from 'react-native';
+import { useFonts } from 'expo-font';
+import { Inter_400Regular, Inter_700Bold } from '@expo-google-fonts/inter';
+import * as Notifications from 'expo-notifications';
+import * as Linking from 'expo-linking';
 
-import uuid from 'react-native-uuid';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// This path is correct because the components folder is now inside `app`
-import TaskItem from './components/TaskItem';
+import { TaskProvider } from './context/TaskContext';
+import { AuthProvider, useAuth } from '../hooks/useAuth';
 import AddTaskModal from './components/AddTaskModal';
+import TaskListScreen from './screens/TaskListScreen';
+import LoginScreen from './auth/login';
+import SignupScreen from './auth/signup';
 
-type Task = {
-  id: string;
-  text: string;
-  completed: boolean;
-};
+// Request/handle notifications — simple wrapper
+// Return full NotificationBehavior shape to satisfy TypeScript across SDK versions
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+    // Newer SDKs include banner/list flags — set them for compatibility
+    // @ts-ignore: some SDK versions don't declare these fields in types, but runtime accepts them
+    shouldShowBanner: true,
+    // @ts-ignore
+    shouldShowList: true,
+  }),
+});
 
-const TASKS_STORAGE_KEY = '@ItsDone:tasks';
+const prefix = Linking.createURL('/');
 
-const App = () => {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const isFirstRun = useRef(true);
+const AppShell: React.FC = () => {
+  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_700Bold });
+  const { user, loading } = useAuth();
+  const scheme = useColorScheme();
 
-  // Load tasks from AsyncStorage when the app starts
   useEffect(() => {
-    const loadTasks = async () => {
-      try {
-        const storedTasks = await AsyncStorage.getItem(TASKS_STORAGE_KEY);
-        if (storedTasks !== null) {
-          setTasks(JSON.parse(storedTasks));
-        }
-      } catch (e) {
-        Alert.alert('Error', 'Failed to load tasks.');
-      }
-    };
-    loadTasks();
+    (async () => {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') await Notifications.requestPermissionsAsync();
+    })();
+
+    // handle deep linking for widget actions: itsdone://completeTask/TASK_ID
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      // parse and handle in TaskProvider or navigate accordingly
+      // Example: itsdone://completeTask/12345 -> we could call a handler to toggle complete
+      console.log('Deep link received', url);
+    });
+    return () => subscription.remove();
   }, []);
 
-  // Save tasks to AsyncStorage whenever the tasks state changes
-  useEffect(() => {
-    const saveTasks = async () => {
-      try {
-        await AsyncStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
-      } catch (e) {
-        Alert.alert('Error', 'Failed to save tasks.');
-      }
-    };
-    if (isFirstRun.current) {
-      isFirstRun.current = false;
-      return;
-    }
-    saveTasks();
-  }, [tasks]);
-
-  const handleAddTask = (text: string) => {
-    const newTask: Task = {
-      id: uuid.v4() as string,
-      text: text,
-      completed: false,
-    };
-    setTasks([newTask, ...tasks]);
-    setModalVisible(false);
-  };
-
-  const handleToggleComplete = (id: string) => {
-    setTasks(
-      tasks.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      )
-    );
-  };
-
-  const handleDeleteTask = (id: string) => {
-    setTasks(tasks.filter((task) => task.id !== id));
-  };
-
-  const sortedTasks = useMemo(() => {
-    return [...tasks].sort((a, b) => Number(a.completed) - Number(b.completed));
-  }, [tasks]);
-
-  const renderTaskItem = useCallback(
-    ({ item }: { item: Task }) => (
-      <TaskItem
-        task={item}
-        onToggleComplete={() => handleToggleComplete(item.id)}
-        onDelete={() => handleDeleteTask(item.id)}
-      />
-    ),
-    [tasks]
-  );
+  if (!fontsLoaded || loading) return null;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <View style={styles.header}>
-        <Text style={styles.headerText}>ItsDone</Text>
-      </View>
-      <FlatList
-        data={sortedTasks}
-        renderItem={renderTaskItem}
-        keyExtractor={(item) => item.id}
-        style={styles.taskList}
-      />
-      <TouchableOpacity style={styles.fab} onPress={() => setModalVisible(true)}>
-        <Text style={styles.fabIcon}>+</Text>
-      </TouchableOpacity>
-      <AddTaskModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        onSave={handleAddTask}
-      />
+    <SafeAreaView style={[styles.container, scheme === 'dark' ? styles.dark : styles.light]}>
+      <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
+      {user ? (
+        <TaskProvider>
+          <TaskListScreen />
+        </TaskProvider>
+      ) : (
+        // simple auth selector — in a real app you'd use a router
+        <View style={{ flex: 1 }}>
+          <LoginScreen />
+          <View style={{ padding: 12 }}>
+            <Text style={{ textAlign: 'center' }}>Or create an account</Text>
+            <SignupScreen />
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
 
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
+  );
+};
+
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f5f5f5' },
-    header: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#eee', backgroundColor: '#fff' },
-    headerText: { fontSize: 24, fontWeight: 'bold', color: '#000' },
-    taskList: { flex: 1 },
-    fab: { position: 'absolute', right: 30, bottom: 30, width: 60, height: 60, borderRadius: 30, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4 },
-    fabIcon: { fontSize: 30, color: '#fff' },
+  container: { flex: 1 },
+  light: { backgroundColor: '#f5f5f5' },
+  dark: { backgroundColor: '#0b1220' },
 });
 
 export default App;
+

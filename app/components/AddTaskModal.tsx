@@ -6,24 +6,33 @@ import {
   TextInput,
   StyleSheet,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import { useTasks } from '../context/TaskContext';
 
-const AddTaskModal = ({ visible, onClose, onSave }) => {
+type AddTaskModalProps = {
+  visible: boolean;
+  onClose: () => void;
+};
+
+const AddTaskModal: React.FC<AddTaskModalProps> = ({ visible, onClose }) => {
   const [taskText, setTaskText] = React.useState('');
+  const [pickerVisible, setPickerVisible] = React.useState(false);
+  const [dueDate, setDueDate] = React.useState<Date | null>(null);
+  const { addTask } = useTasks();
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (taskText.trim().length > 0) {
-      onSave(taskText.trim());
+      await addTask({ text: taskText.trim(), completed: false, dueDate: dueDate ? dueDate.toISOString() : null });
       setTaskText(''); // Clear input after saving
+      setDueDate(null);
+      onClose();
     }
   };
 
   return (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={visible}
-      onRequestClose={onClose}>
+    <Modal animationType="slide" transparent={true} visible={visible} onRequestClose={onClose}>
       <View style={styles.centeredView}>
         <View style={styles.modalView}>
           <Text style={styles.modalTitle}>New Task</Text>
@@ -33,25 +42,38 @@ const AddTaskModal = ({ visible, onClose, onSave }) => {
             value={taskText}
             onChangeText={setTaskText}
             autoFocus={true}
+            returnKeyType="done"
+            onSubmitEditing={handleSave}
           />
+
+          <TouchableOpacity style={styles.dateButton} onPress={() => setPickerVisible(true)}>
+            <Text style={styles.dateButtonText}>{dueDate ? dueDate.toLocaleString() : 'Add due date (optional)'}</Text>
+          </TouchableOpacity>
+
           <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={[styles.button, styles.buttonClose]}
               onPress={() => {
                 setTaskText('');
+                setDueDate(null);
                 onClose();
               }}>
               <Text style={styles.textStyle}>Cancel</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, styles.buttonSave]}
-              onPress={() => {
-                handleSave();
-                onClose();
-              }}>
+            <TouchableOpacity style={[styles.button, styles.buttonSave]} onPress={handleSave}>
               <Text style={styles.textStyle}>Save</Text>
             </TouchableOpacity>
           </View>
+
+          <DateTimePickerModal
+            isVisible={pickerVisible}
+            mode="datetime"
+            onConfirm={(date: Date) => {
+              setDueDate(date);
+              setPickerVisible(false);
+            }}
+            onCancel={() => setPickerVisible(false)}
+          />
         </View>
       </View>
     </Modal>
@@ -81,6 +103,18 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 15,
+  },
+  dateButton: {
+    width: '100%',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  dateButtonText: {
+    color: '#444',
   },
   input: {
     width: '100%',

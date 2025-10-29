@@ -1,18 +1,30 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Task as TaskType } from '../context/TaskContext';
+import LottieView from 'lottie-react-native';
 
-const TaskItem = ({ task, onToggleComplete, onDelete }) => {
-  const taskTextStyle = task.completed
-    ? [styles.taskText, styles.completedTaskText]
-    : styles.taskText;
+type TaskItemProps = {
+  task: TaskType;
+  onToggleComplete: () => void;
+  onDelete: () => void;
+};
+
+const TaskItem: React.FC<TaskItemProps> = ({ task, onToggleComplete, onDelete }) => {
+  const taskTextStyle = task.completed ? [styles.taskText, styles.completedTaskText] : styles.taskText;
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity onPress={onToggleComplete} style={styles.taskContent}>
-        <View style={styles.checkbox}>
-          {task.completed && <View style={styles.checkmark} />}
+    <View style={[styles.container, task.completed ? styles.completedContainer : null]}>
+      <TouchableOpacity onPress={onToggleComplete} style={styles.taskContent} activeOpacity={0.7}>
+        <View style={[styles.checkbox, task.completed ? styles.checkboxActive : null]}>
+          {task.completed && (
+            // small lottie check animation placeholder; actual JSON to be added later
+            <LottieView source={require('../../assets/animations/check.json')} style={{ width: 28, height: 28 }} autoPlay loop={false} />
+          )}
         </View>
-        <Text style={taskTextStyle}>{task.text}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={taskTextStyle}>{task.text}</Text>
+          {task.dueDate ? <Text style={styles.dueText}>Due: {new Date(task.dueDate).toLocaleString()}</Text> : null}
+        </View>
       </TouchableOpacity>
       <TouchableOpacity onPress={onDelete} style={styles.deleteButton}>
         <Text style={styles.deleteButtonText}>✕</Text>
@@ -68,6 +80,17 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     fontSize: 20,
     color: '#ff3b30',
+  },
+  completedContainer: {
+    backgroundColor: '#f0f8ff',
+  },
+  checkboxActive: {
+    backgroundColor: '#007AFF',
+  },
+  dueText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
   },
 });
 
