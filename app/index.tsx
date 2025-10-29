@@ -9,8 +9,7 @@ import { TaskProvider } from './context/TaskContext';
 import { AuthProvider, useAuth } from '../hooks/useAuth';
 import AddTaskModal from './components/AddTaskModal';
 import TaskListScreen from './screens/TaskListScreen';
-import LoginScreen from './auth/login';
-import SignupScreen from './auth/signup';
+import AuthScreen from './auth';
 
 // Request/handle notifications — simple wrapper
 // Return full NotificationBehavior shape to satisfy TypeScript across SDK versions
@@ -59,13 +58,9 @@ const AppShell: React.FC = () => {
           <TaskListScreen />
         </TaskProvider>
       ) : (
-        // simple auth selector — in a real app you'd use a router
+        // single auth container that toggles between Login and Sign Up
         <View style={{ flex: 1 }}>
-          <LoginScreen />
-          <View style={{ padding: 12 }}>
-            <Text style={{ textAlign: 'center' }}>Or create an account</Text>
-            <SignupScreen />
-          </View>
+          <AuthScreen />
         </View>
       )}
     </SafeAreaView>
